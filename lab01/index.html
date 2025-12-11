@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Аналіз безпеки пароля</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        background-color: #f8f9fa;
+      }
+      .score-badge {
+        font-size: 1.1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container py-5">
+      <h1 class="mb-4 text-center">Аналіз безпеки пароля</h1>
+
+      <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h5 class="card-title mb-3">Вхідні дані</h5>
+
+              <form id="passwordForm" novalidate>
+                <div class="mb-3">
+                  <label for="nameInput" class="form-label"
+                    >Ім’я та прізвище</label
+                  >
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="nameInput"
+                    placeholder="Наприклад: Ivan Petrov"
+                    required
+                  />
+                </div>
+
+                <div class="mb-3">
+                  <label for="birthDateInput" class="form-label"
+                    >Дата народження</label
+                  >
+                  <input
+                    type="date"
+                    class="form-control"
+                    id="birthDateInput"
+                    required
+                  />
+                </div>
+
+                <div class="mb-3">
+                  <label for="passwordInput" class="form-label">Пароль</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="passwordInput"
+                    placeholder="Наприклад: ivan1995"
+                    required
+                  />
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100">
+                  Проаналізувати пароль
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <div id="resultContainer" class="mt-4 d-none">
+            <div class="card shadow-sm">
+              <div class="card-body">
+                <h5 class="card-title mb-3">Результати аналізу пароля</h5>
+
+                <p class="mb-2">
+                  <strong>Оцінка безпеки:</strong>
+                  <span
+                    id="scoreBadge"
+                    class="badge rounded-pill score-badge"
+                  ></span>
+                </p>
+                <p class="mb-2">
+                  <strong>Рівень безпеки:</strong>
+                  <span id="levelText"></span>
+                </p>
+
+                <hr />
+
+                <h6>Деталі аналізу</h6>
+                <ul id="detailsList" class="mb-3"></ul>
+
+                <h6>Рекомендації</h6>
+                <ul id="recommendationsList" class="mb-0"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+      const form = document.getElementById("passwordForm");
+      const resultContainer = document.getElementById("resultContainer");
+      const scoreBadge = document.getElementById("scoreBadge");
+      const levelText = document.getElementById("levelText");
+      const detailsList = document.getElementById("detailsList");
+      const recommendationsList = document.getElementById(
+        "recommendationsList"
+      );
+
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        const name = document.getElementById("nameInput").value.trim();
+        const birthDate = document.getElementById("birthDateInput").value;
+        const password = document.getElementById("passwordInput").value;
+
+        if (!name || !birthDate || !password) {
+          alert("Будь ласка, заповніть усі поля.");
+          return;
+        }
+
+        const analysisResult = analyzePassword(password, name, birthDate);
+
+        showResults(analysisResult);
+      });
+
+      /**
+       * Головна функція для аналізу пароля
+       */
+      function analyzePassword(password, name, birthDate) {
+        let score = 0;
+        const details = [];
+        const recommendations = [];
+
+        {
+          const analysisResult = analyzePersonalData(password, name, birthDate);
+          score += analysisResult.score;
+          details.push(...analysisResult.details);
+          recommendations.push(...analysisResult.recommendations);
+        }
+
+        {
+          const analysisResult = analyzeLength(password);
+          score += analysisResult.score;
+          details.push(...analysisResult.details);
+          recommendations.push(...analysisResult.recommendations);
+        }
+
+        {
+          const analysisResult = analyzeDiversity(password);
+          score += analysisResult.score;
+          details.push(...analysisResult.details);
+          recommendations.push(...analysisResult.recommendations);
+        }
+
+        {
+          const analysisResult = analyzeWeakWords(password);
+          score += analysisResult.score;
+          details.push(...analysisResult.details);
+          recommendations.push(...analysisResult.recommendations);
+        }
+
+        return {
+          score: Math.min(Math.max(score, 1), 10), // keep score within the range [1, 10]
+          level: determineLevel(score),
+          details: [...new Set(details)],
+          recommendations: [...new Set(recommendations)],
+        };
+      }
+
+      function showResults(analysisResult) {
+        resultContainer.classList.remove("d-none");
+
+        // choose badge color
+        scoreBadge.textContent = `${analysisResult.score} / 10`;
+        scoreBadge.className = "badge rounded-pill score-badge";
+
+        if (analysisResult.score <= 3) {
+          scoreBadge.classList.add("bg-danger");
+        } else if (analysisResult.score <= 6) {
+          scoreBadge.classList.add("bg-warning", "text-dark");
+        } else if (analysisResult.score <= 8) {
+          scoreBadge.classList.add("bg-info", "text-dark");
+        } else {
+          scoreBadge.classList.add("bg-success");
+        }
+
+        levelText.textContent = analysisResult.level;
+
+        detailsList.innerHTML = "";
+        analysisResult.details.forEach((item) => {
+          const li = document.createElement("li");
+          li.textContent = item;
+          detailsList.appendChild(li);
+        });
+
+        recommendationsList.innerHTML = "";
+        if (analysisResult.recommendations.length === 0) {
+          const li = document.createElement("li");
+          li.textContent =
+            "Ваш пароль виглядає доволі надійним. Продовжуйте використовувати схожі підходи.";
+          recommendationsList.appendChild(li);
+        } else {
+          analysisResult.recommendations.forEach((item) => {
+            const li = document.createElement("li");
+            li.textContent = item;
+            recommendationsList.appendChild(li);
+          });
+        }
+      }
+
+      /**
+       * Функція для аналізу пароля на наявність імені або дати народження.
+       */
+      function analyzePersonalData(password, name, birthDate) {
+        let score = 0;
+        const details = [];
+        const recommendations = [];
+
+        const passwordLower = password.toLowerCase();
+        const nameLower = name.toLowerCase();
+
+        let issues = 0;
+
+        const nameWords = nameLower.split(/\s+/).filter((p) => p.length > 1);
+        nameWords.forEach((nameWord) => {
+          if (passwordLower.includes(nameWord)) {
+            details.push(`У паролі виявлено частину імені: "${nameWord}".`);
+            recommendations.push(
+              "Уникайте використання імені (повністю або частково) у паролі."
+            );
+            issues += 1;
+          }
+        });
+
+        // format: (yyyy-mm-dd)
+        const birthDateParts = [...birthDate.matchAll(/\d+/g)];
+        const birthYear = birthDateParts[0];
+        const birthMonth = birthDateParts[1];
+        const birthDay = birthDateParts[2];
+
+        if (passwordLower.includes(birthYear)) {
+          details.push("У паролі виявлено рік народження.");
+          recommendations.push(
+            "Не використовуйте рік народження або інші очевидні дати в паролі."
+          );
+          issues += 1;
+        }
+
+        if (passwordLower.includes(birthMonth)) {
+          details.push("У паролі виявлено місяць народження.");
+          recommendations.push(
+            "Не використовуйте місяць народження або інші очевидні дати в паролі."
+          );
+          issues += 1;
+        }
+
+        if (passwordLower.includes(birthDay)) {
+          details.push("У паролі виявлено день народження.");
+          recommendations.push(
+            "Не використовуйте день народження або інші очевидні дати в паролі."
+          );
+          issues += 1;
+        }
+
+        switch (true) {
+          case issues === 0:
+            details.push(
+              "Очевидні персональні дані (ім’я, рік народження) не використані."
+            );
+            break;
+          case issues === 1:
+            score = -2;
+            break;
+          case issues >= 2:
+            score = -4;
+            break;
+        }
+
+        return {
+          score,
+          details,
+          recommendations,
+        };
+      }
+
+      /**
+       * Функція для аналізу довжини пароля.
+       */
+      function analyzeLength(password) {
+        let score = 0;
+        const details = [];
+        const recommendations = [];
+
+        const length = password.length;
+
+        switch (true) {
+          case length < 6:
+            details.push(`Довжина пароля: ${length} символів — дуже короткий.`);
+            recommendations.push(
+              "Збільште довжину пароля щонайменше до 8–10 символів."
+            );
+            score = 1;
+            break;
+          case 6 <= length && length <= 8:
+            details.push(
+              `Довжина пароля: ${length} символів — слабка/середня.`
+            );
+            recommendations.push(
+              "Рекомендується використовувати пароль довжиною від 10–12 символів."
+            );
+            score = 3;
+            break;
+          case 8 < length && length < 12:
+            details.push(`Довжина пароля: ${length} символів — прийнятна.`);
+            score = 5;
+            break;
+          default:
+            details.push(`Довжина пароля: ${length} символів — добра.`);
+            score = 7;
+            break;
+        }
+
+        return {
+          score,
+          details,
+          recommendations,
+        };
+      }
+
+      /**
+       * Функція для аналізу пароля на використання різноманітних типів символів.
+       */
+      function analyzeDiversity(password) {
+        let score = 0;
+        const details = [];
+        const recommendations = [];
+
+        const hasLower = /[a-zа-яёіїєґ]/.test(password);
+        const hasUpper = /[A-ZА-ЯЁІЇЄҐ]/.test(password);
+        const hasDigits = /\d/.test(password);
+        const hasSpecial = /[^0-9A-Za-zА-Яа-яЁёІіЇїЄєҐґ]/.test(password);
+
+        let typesCount = 0;
+
+        if (hasLower) typesCount++;
+        if (hasUpper) typesCount++;
+        if (hasDigits) typesCount++;
+        if (hasSpecial) typesCount++;
+
+        switch (typesCount) {
+          case 1:
+            details.push(
+              "Використовується лише один тип символів (дуже слабка різноманітність)."
+            );
+            recommendations.push(
+              "Додайте великі та малі літери, цифри та спеціальні символи."
+            );
+            score = 0;
+            break;
+          case 2:
+            details.push(
+              "Використовується 2 типи символів — слабка різноманітність."
+            );
+            recommendations.push(
+              "Рекомендується додати ще хоча б один тип символів (цифри або спецсимволи)."
+            );
+            score = 1;
+            break;
+          case 3:
+            details.push(
+              "Використовується 3 типи символів — хороша різноманітність."
+            );
+            score = 2;
+            break;
+          case 4:
+            details.push(
+              "Використовується 4 типи символів — відмінна різноманітність."
+            );
+            score = 3;
+            break;
+        }
+
+        return {
+          score,
+          details,
+          recommendations,
+        };
+      }
+
+      /**
+       * Функція для аналізу пароля на використання словникових слів.
+       */
+      function analyzeWeakWords(password) {
+        const weakWords = [
+          "password",
+          "welcome",
+          "qwerty",
+          "monkey",
+          "jesus",
+          "love",
+          "money",
+          "freedom",
+          "ninja",
+          "writer",
+        ];
+
+        let score = 0;
+        const details = [];
+        const recommendations = [];
+
+        let hasWeakWord = false;
+
+        weakWords.forEach((word) => {
+          const regexp = new RegExp(word, "i");
+
+          if (regexp.test(password)) {
+            hasWeakWord = true;
+            details.push(`У паролі виявлено поширене слабке слово: "${word}".`);
+          }
+        });
+
+        if (hasWeakWord) {
+          recommendations.push(
+            "Уникайте використання популярних словникових слів у паролі."
+          );
+          score = -2;
+        } else {
+          details.push(
+            "Поширених слабких словникових слів у паролі не виявлено."
+          );
+          score = 0;
+        }
+
+        return {
+          score,
+          details,
+          recommendations,
+        };
+      }
+
+      /**
+       * Функція для кореляції оцінки безпеки пароля й рівня безпеки.
+       */
+      function determineLevel(score) {
+        switch (true) {
+          case score <= 3:
+            return "Низький (дуже слабкий пароль)";
+          case score <= 6:
+            return "Середній (пароль можна покращити)";
+          case score <= 8:
+            return "Вище середнього (доволі непоганий пароль)";
+          default:
+            return "Високий (сильний пароль)";
+        }
+      }
+    </script>
+  </body>
+</html>
