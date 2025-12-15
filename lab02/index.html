@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Порівняльний аналіз шифрів Цезаря та Віженера</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        background-color: #f8f9fa;
+      }
+      textarea {
+        resize: vertical;
+      }
+      .cipher-box {
+        font-family: "Courier New", monospace;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container py-5">
+      <h1 class="mb-4 text-center">Порівняльний аналіз класичних шифрів</h1>
+
+      <div class="row justify-content-center">
+        <div class="col-lg-10">
+          <div class="card shadow-sm mb-4">
+            <div class="card-body">
+              <h5 class="card-title mb-3">Вхідні дані</h5>
+
+              <form id="cryptoForm" novalidate>
+                <div class="row g-3">
+                  <div class="col-md-4">
+                    <label for="surnameInput" class="form-label"
+                      >Прізвище (латиницею) (для Віженера)</label
+                    >
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="surnameInput"
+                      placeholder="Наприклад: Petrenko"
+                      required
+                    />
+                  </div>
+
+                  <div class="col-md-4">
+                    <label for="birthdateInput" class="form-label"
+                      >Дата народження (для Цезаря)</label
+                    >
+                    <input
+                      type="date"
+                      class="form-control"
+                      id="birthdateInput"
+                      required
+                    />
+                    <div class="form-text">
+                      Зсув = сума всіх цифр дати (рік+місяць+день).
+                    </div>
+                  </div>
+
+                  <div class="col-md-4 d-flex align-items-end">
+                    <button
+                      type="button"
+                      id="fillExampleBtn"
+                      class="btn btn-outline-secondary w-100"
+                    >
+                      Підставити текст з прикладу
+                    </button>
+                  </div>
+                </div>
+
+                <div class="mt-3">
+                  <label for="plainTextInput" class="form-label"
+                    >Текст для шифрування (латиницею)</label
+                  >
+                  <textarea
+                    class="form-control"
+                    id="plainTextInput"
+                    rows="3"
+                    placeholder="Введіть текст, який потрібно зашифрувати..."
+                    required
+                  ></textarea>
+                  <div class="form-text">
+                    Наприклад: «Programs and data security is an important
+                    course».
+                  </div>
+                </div>
+
+                <div class="mt-3 d-grid d-md-flex gap-2">
+                  <button type="submit" class="btn btn-primary">
+                    Виконати шифрування
+                  </button>
+                  <button
+                    type="button"
+                    id="clearBtn"
+                    class="btn btn-outline-danger"
+                  >
+                    Очистити все
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div id="resultsContainer" class="d-none">
+            <div class="card shadow-sm mb-4">
+              <div class="card-body">
+                <h5 class="card-title mb-3">Результати шифрування</h5>
+
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <h6>Шифр Цезаря</h6>
+                    <p class="mb-1">
+                      <strong>Зсув (ключ):</strong>
+                      <span id="caesarShiftText"></span>
+                    </p>
+                    <p class="mb-1">
+                      <strong>Зашифрований текст:</strong>
+                    </p>
+                    <div
+                      class="cipher-box border rounded p-2 mb-2"
+                      id="caesarCipherText"
+                    ></div>
+                    <p class="mb-1">
+                      <strong>Розшифрований текст:</strong>
+                    </p>
+                    <div
+                      class="cipher-box border rounded p-2"
+                      id="caesarDecryptedText"
+                    ></div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <h6>Шифр Віженера</h6>
+                    <p class="mb-1">
+                      <strong>Ключ (прізвище):</strong>
+                      <span id="vigenereKeyText"></span>
+                    </p>
+                    <p class="mb-1">
+                      <strong>Зашифрований текст:</strong>
+                    </p>
+                    <div
+                      class="cipher-box border rounded p-2 mb-2"
+                      id="vigenereCipherText"
+                    ></div>
+                    <p class="mb-1">
+                      <strong>Розшифрований текст:</strong>
+                    </p>
+                    <div
+                      class="cipher-box border rounded p-2"
+                      id="vigenereDecryptedText"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+              <div class="card-body">
+                <h5 class="card-title mb-3">Порівняльний аналіз</h5>
+
+                <div class="table-responsive mb-3">
+                  <table class="table table-bordered table-sm align-middle">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Алгоритм</th>
+                        <th>Ключ</th>
+                        <th>Довжина шифртексту</th>
+                        <th>Читабельність</th>
+                        <th>Перевірка розшифрування</th>
+                        <th>Коментар щодо стійкості</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Цезар</td>
+                        <td id="caesarKeyInfo"></td>
+                        <td id="caesarLengthInfo"></td>
+                        <td id="caesarReadableInfo"></td>
+                        <td id="caesarDecryptOk"></td>
+                        <td id="caesarComment"></td>
+                      </tr>
+                      <tr>
+                        <td>Віженер</td>
+                        <td id="vigenereKeyInfo"></td>
+                        <td id="vigenereLengthInfo"></td>
+                        <td id="vigenereReadableInfo"></td>
+                        <td id="vigenereDecryptOk"></td>
+                        <td id="vigenereComment"></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <h6>Короткий висновок</h6>
+                <p id="summaryConclusion" class="mb-0"></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+      const form = document.getElementById("cryptoForm");
+      const resultsContainer = document.getElementById("resultsContainer");
+      const fillExampleBtn = document.getElementById("fillExampleBtn");
+      const clearBtn = document.getElementById("clearBtn");
+
+      const caesarShiftText = document.getElementById("caesarShiftText");
+      const caesarCipherText = document.getElementById("caesarCipherText");
+      const caesarDecryptedText = document.getElementById(
+        "caesarDecryptedText"
+      );
+
+      const vigenereKeyText = document.getElementById("vigenereKeyText");
+      const vigenereCipherText = document.getElementById("vigenereCipherText");
+      const vigenereDecryptedText = document.getElementById(
+        "vigenereDecryptedText"
+      );
+
+      const caesarKeyInfo = document.getElementById("caesarKeyInfo");
+      const caesarLengthInfo = document.getElementById("caesarLengthInfo");
+      const caesarReadableInfo = document.getElementById("caesarReadableInfo");
+      const caesarDecryptOk = document.getElementById("caesarDecryptOk");
+      const caesarComment = document.getElementById("caesarComment");
+
+      const vigenereKeyInfo = document.getElementById("vigenereKeyInfo");
+      const vigenereLengthInfo = document.getElementById("vigenereLengthInfo");
+      const vigenereReadableInfo = document.getElementById(
+        "vigenereReadableInfo"
+      );
+      const vigenereDecryptOk = document.getElementById("vigenereDecryptOk");
+      const vigenereComment = document.getElementById("vigenereComment");
+
+      const summaryConclusion = document.getElementById("summaryConclusion");
+
+      fillExampleBtn.addEventListener("click", () => {
+        document.getElementById("plainTextInput").value =
+          "Programs and data security is an important course.";
+      });
+
+      clearBtn.addEventListener("click", () => {
+        form.reset();
+        document.getElementById("plainTextInput").value = "";
+        resultsContainer.classList.add("d-none");
+      });
+
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        const surname = document.getElementById("surnameInput").value.trim();
+        const birthDate = document.getElementById("birthdateInput").value;
+        const plainText = document.getElementById("plainTextInput").value;
+
+        if (!surname || !birthDate || !plainText) {
+          alert("Будь ласка, заповніть усі поля.");
+          return;
+        }
+
+        const caesarShift = generateCaesarShift(birthDate);
+        const caesarEncryptedText = caesarEncrypt(plainText, caesarShift);
+        const caesarDecryptedText = caesarDecrypt(
+            caesarEncryptedText,
+            caesarShift
+        );
+        
+        const vigenereKey = generateVigenereKey(surname);
+        const vigenereEncryptedText = vigenereEncrypt(plainText, vigenereKey);
+        const vigenereDecryptedText = vigenereDecrypt(
+          vigenereEncryptedText,
+          vigenereKey
+        );
+
+        showResults({
+          plainText,
+          caesarShift,
+          vigenereKey,
+          caesarEncryptedText,
+          caesarDecryptedText,
+          vigenereEncryptedText,
+          vigenereDecryptedText,
+        });
+      });
+
+      /**
+       * Функція для вираховування зсуву з дати народження для алгоритма Цезаря.
+       */
+      function generateCaesarShift(birthDate) {
+        const digits = birthDate.replace(/\D/g, "").split("");
+        const sum = digits.reduce((acc, d) => acc + parseInt(d, 10), 0);
+        return sum;
+      }
+
+      /**
+       * Функція для генерації ключа з прізвища для алгоритма Віженера.
+       */
+      function generateVigenereKey(surname) {
+        const lettersOnly = surname.toUpperCase().replace(/[^A-Z]/g, "");
+        return lettersOnly || "KEY";
+      }
+
+      /**
+       * Функція для шифрування тексту, спираючись на зсув.
+       */
+      function caesarEncrypt(plainText, shift) {
+        return plainText
+          .split("")
+          .map((ch) => shiftCharCaesar(ch, shift))
+          .join("");
+      }
+
+      /**
+       * Функція для дешифрування тексту, спираючись на зсув.
+       */
+      function caesarDecrypt(caesarEncryptedText, shift) {
+        return caesarEncryptedText
+          .split("")
+          .map((ch) => shiftCharCaesar(ch, -shift))
+          .join("");
+      }
+
+      function shiftCharCaesar(ch, shift) {
+        const code = ch.charCodeAt(0);
+        const alphabetSize = 26;
+
+        // A-Z
+        if (code >= 65 && code <= 90) {
+          const floor = 65;
+          return String.fromCharCode(
+            ((code - floor + shift + alphabetSize * 100) % alphabetSize) + floor
+          );
+        }
+
+        // a-z
+        if (code >= 97 && code <= 122) {
+          const floor = 97;
+          return String.fromCharCode(
+            ((code - floor + shift + alphabetSize * 100) % alphabetSize) + floor
+          );
+        }
+
+        // other chars we don't change
+        return ch;
+      }
+
+      /**
+       * Функція для шифрування тексту, спираючись на ключ.
+       */
+      function vigenereEncrypt(plainText, key) {
+        let result = "";
+        let keyIndex = 0;
+        const keyLen = key.length;
+
+        for (let i = 0; i < plainText.length; i++) {
+          const ch = plainText[i];
+          const code = ch.charCodeAt(0);
+
+          if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
+            const keyChar = key[keyIndex % keyLen];
+            const keyShift = keyChar.charCodeAt(0) - 65; // A=0, B=1, ...
+
+            result += shiftCharCaesar(ch, keyShift);
+            keyIndex++;
+          } else {
+            result += ch;
+          }
+        }
+
+        return result;
+      }
+
+      /**
+       * Функція для дешифрування тексту, спираючись на ключ.
+       */
+      function vigenereDecrypt(vigenereEncryptedText, key) {
+        let result = "";
+        let keyIndex = 0;
+        const keyLen = key.length;
+
+        for (let i = 0; i < vigenereEncryptedText.length; i++) {
+          const ch = vigenereEncryptedText[i];
+          const code = ch.charCodeAt(0);
+
+          if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
+            const keyChar = key[keyIndex % keyLen];
+            const keyShift = keyChar.charCodeAt(0) - 65; // A=0, B=1, ...
+
+            result += shiftCharCaesar(ch, -keyShift);
+            keyIndex++;
+          } else {
+            result += ch;
+          }
+        }
+
+        return result;
+      }
+
+      function showResults(data) {
+        resultsContainer.classList.remove("d-none");
+
+        caesarShiftText.textContent = data.caesarShift;
+        caesarCipherText.textContent = data.caesarEncryptedText;
+        caesarDecryptedText.textContent = data.caesarDecryptedText;
+
+        vigenereKeyText.textContent = data.vigenereKey;
+        vigenereCipherText.textContent = data.vigenereEncryptedText;
+        vigenereDecryptedText.textContent = data.vigenereDecryptedText;
+
+        caesarLengthInfo.textContent =
+          data.caesarEncryptedText.length + " символів";
+        vigenereLengthInfo.textContent =
+          data.vigenereEncryptedText.length + " символів";
+
+        caesarKeyInfo.textContent = "Зсув = " + data.caesarShift;
+        vigenereKeyInfo.textContent =
+          data.vigenereKey +
+          " (довжина " +
+          data.vigenereKey.length +
+          " символів)";
+
+        caesarReadableInfo.textContent = analyzeReadability(
+          data.caesarEncryptedText
+        );
+        vigenereReadableInfo.textContent = analyzeReadability(
+          data.vigenereEncryptedText
+        );
+
+        caesarDecryptOk.textContent =
+          data.caesarDecryptedText === data.plainText
+            ? "Так, збігається з оригіналом."
+            : "Ні, є відмінності.";
+
+        vigenereDecryptOk.textContent =
+          data.vigenereDecryptedText === data.plainText
+            ? "Так, збігається з оригіналом."
+            : "Ні, є відмінності.";
+
+        caesarComment.textContent =
+          "Простий моноалфавітний шифр. Ключ — одне число, легко перебирається повним перебором (максимум 26 варіантів).";
+        vigenereComment.textContent =
+          "Поліалфавітний шифр. Ключ — слово/фраза, стійкість залежить від довжини ключа, перебір значно складніший.";
+
+        summaryConclusion.textContent =
+          "Шифр Цезаря є простішим для реалізації та розуміння, але має низьку криптостійкість через малий простір ключів. " +
+          "Шифр Віженера, завдяки використанню послідовності зсувів на основі ключового слова (наприклад, прізвища студента), " +
+          "демонструє вищу стійкість і є кращим варіантом для захисту текстової інформації в навчальних прикладах.";
+      }
+
+      /**
+       * Функція для аналізу читабельності зашифрованого тексту.
+       */
+      function analyzeReadability(text) {
+        const spaces = (text.match(/\s/g) || []).length;
+        const letters = (text.match(/[A-Za-z]/g) || []).length;
+
+        if (letters === 0) {
+          return "Містить майже лише неалфавітні символи — виглядає як випадковий набір.";
+        }
+
+        if (spaces > 0) {
+          return "Містить пробіли та букви — читабельність частково збережена.";
+        }
+
+        return "Без пробілів, переважно букви — читати важко, виглядає зашифрованим.";
+      }
+    </script>
+  </body>
+</html>
