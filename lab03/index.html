@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LSB-стеганографія в зображеннях</title>
+
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        background: #f8f9fa;
+      }
+      canvas {
+        max-width: 100%;
+        border: 1px solid #ccc;
+      }
+      .mono {
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container py-4">
+      <h1 class="text-center mb-4">Приховування тексту в зображенні (LSB)</h1>
+
+      <div class="card mb-4">
+        <div class="card-body">
+          <h5>Вхідні дані</h5>
+
+          <div class="mb-3">
+            <label class="form-label">Оберіть зображення</label>
+            <input
+              type="file"
+              id="imageInput"
+              class="form-control"
+              accept="image/jpeg,image/png"
+            />
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Повідомлення (латиницею)</label>
+            <textarea
+              id="messageInput"
+              class="form-control"
+              rows="3"
+              placeholder="Наприклад: Ivan Petrov"
+            ></textarea>
+          </div>
+
+          <button class="btn btn-primary me-2" onclick="hideMessage()">
+            Приховати повідомлення
+          </button>
+          <button class="btn btn-secondary" onclick="extractMessage()">
+            Витягнути повідомлення
+          </button>
+        </div>
+      </div>
+
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <h6>Оригінальне / Модифіковане зображення</h6>
+          <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="col-md-6">
+          <h6>Результат витягування</h6>
+          <div class="border rounded p-3 bg-white mono" id="output"></div>
+        </div>
+      </div>
+
+      <div id="successBox" class="alert alert-success d-none mt-3">
+        Повідомлення успішно приховано в зображенні.
+      </div>
+
+      <button
+        id="downloadBtn"
+        class="btn btn-success d-none mt-2 mb-4"
+        onclick="downloadImage()"
+      >
+        Завантажити зображення
+      </button>
+
+      <div class="card">
+        <div class="card-body">
+          <h5>Аналіз змін</h5>
+          <ul>
+            <li>Розмір зображення: <span id="sizeInfo">—</span></li>
+            <li>Візуальні зміни: незначні / непомітні для людського ока</li>
+            <li>Зміни відбуваються лише в молодших бітах кольорів</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      let imageLoaded = false;
+
+      document.getElementById("imageInput").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        document.getElementById("sizeInfo").textContent =
+          (file.size / 1024).toFixed(2) + " KB";
+
+        const img = new Image();
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          imageLoaded = true;
+        };
+        img.src = URL.createObjectURL(file);
+      });
+
+      function hideMessage() {
+        if (!imageLoaded) {
+          alert("Завантажте зображення");
+          return;
+        }
+
+        const message = document.getElementById("messageInput").value;
+        if (!message) {
+          alert("Введіть повідомлення");
+          return;
+        }
+
+        const binary = textToBinary(message + "\0"); // маркер кінця
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        let bitIndex = 0;
+
+        for (
+          let i = 0;
+          i < imgData.data.length && bitIndex < binary.length;
+          i += 4
+        ) {
+          for (let c = 0; c < 3; c++) {
+            if (bitIndex < binary.length) {
+              imgData.data[i + c] =
+                (imgData.data[i + c] & 254) | Number(binary[bitIndex]);
+              bitIndex++;
+            }
+          }
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+
+        document.getElementById("successBox").classList.remove("d-none");
+        document.getElementById("downloadBtn").classList.remove("d-none");
+      }
+
+      function extractMessage() {
+        if (!imageLoaded) {
+          alert("Завантажте зображення");
+          return;
+        }
+
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        let bits = "";
+
+        for (let i = 0; i < imgData.data.length; i += 4) {
+          for (let c = 0; c < 3; c++) {
+            bits += imgData.data[i + c] & 1;
+          }
+        }
+
+        const message = binaryToText(bits);
+        document.getElementById("output").textContent = message;
+      }
+
+      function textToBinary(text) {
+        return text
+          .split("")
+          .map((ch) => ch.charCodeAt(0).toString(2).padStart(8, "0"))
+          .join("");
+      }
+
+      function binaryToText(binary) {
+        let text = "";
+        for (let i = 0; i < binary.length; i += 8) {
+          const byte = binary.substr(i, 8);
+          if (byte === "00000000") break; // маркер кінця
+          text += String.fromCharCode(parseInt(byte, 2));
+        }
+        return text;
+      }
+
+      function downloadImage() {
+        const link = document.createElement("a");
+        link.download = "stego_image.png";
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+      }
+
+      document.getElementById("imageInput").addEventListener("change", () => {
+        document.getElementById("successBox").classList.add("d-none");
+        document.getElementById("downloadBtn").classList.add("d-none");
+        document.getElementById("output").textContent = "";
+      });
+    </script>
+  </body>
+</html>
