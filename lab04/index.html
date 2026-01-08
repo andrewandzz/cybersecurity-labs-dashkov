@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <title>Спрощена система цифрових підписів</title>
+
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+
+  <style>
+    body { background-color: #f8f9fa; }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+    }
+    .box {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container py-4">
+  <h1 class="text-center mb-4">Спрощена система цифрових підписів</h1>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5>1) Генерація ключів</h5>
+
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">Прізвище</label>
+          <input id="surname" class="form-control" placeholder="Петренко">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Дата народження</label>
+          <input id="birthdate" type="date" class="form-control">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Secret word</label>
+          <input id="secret" class="form-control" placeholder="secret_word">
+        </div>
+      </div>
+
+      <button class="btn btn-primary mt-3" id="genKeysBtn">
+        Згенерувати ключі
+      </button>
+
+      <div id="keysStatus" class="mt-2"></div>
+
+      <hr>
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Приватний ключ</label>
+          <div id="privateKeyOut" class="border rounded p-2 bg-white mono box">—</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Публічний ключ</label>
+          <div id="publicKeyOut" class="border rounded p-2 bg-white mono box">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5>2) Створення цифрового підпису</h5>
+
+      <div class="mb-3">
+        <label class="form-label">Оберіть документ для підпису</label>
+        <input id="fileToSign" type="file" class="form-control">
+      </div>
+
+      <button class="btn btn-success" id="signBtn">
+        Створити підпис
+      </button>
+
+      <button class="btn btn-outline-success d-none ms-2" id="downloadSigBtn">
+        Завантажити файл підпису (.sig)
+      </button>
+
+      <div id="signStatus" class="alert d-none mt-3"></div>
+
+      <hr>
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Хеш підписаного документа (SHA-256)</label>
+          <div id="signedHashOut" class="border rounded p-2 bg-white mono box">—</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Цифровий підпис</label>
+          <div id="signatureOut" class="border rounded p-2 bg-white mono box">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5>3) Перевірка цифрового підпису</h5>
+
+      <div class="mb-3">
+        <label class="form-label">Документ для перевірки</label>
+        <input id="fileToVerify" type="file" class="form-control">
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Файл підпису (.sig)</label>
+        <input id="sigFileInput" type="file" class="form-control" accept=".sig">
+      </div>
+
+      <button class="btn btn-secondary" id="verifyBtn">
+        Перевірити підпис
+      </button>
+
+      <div id="verifyResult" class="alert d-none mt-3"></div>
+
+      <hr>
+
+      <label class="form-label">Хеш поточного документа</label>
+      <div id="verifyHashOut" class="border rounded p-2 bg-white mono box">—</div>
+    </div>
+  </div>
+
+<script>
+  let privateKeyBytes = null;
+  let lastSignatureHex = null;
+  let signedFileName = null;
+
+  const $ = id => document.getElementById(id);
+
+  $("genKeysBtn").onclick = async () => {
+    const seed =
+      $("surname").value +
+      $("birthdate").value.replaceAll("-", "") +
+      $("secret").value;
+
+    if (!seed.trim()) {
+      $("keysStatus").innerHTML = "<span class='text-danger'>Заповніть усі поля</span>";
+      return;
+    }
+
+    privateKeyBytes = await sha256Bytes(new TextEncoder().encode(seed));
+    $("privateKeyOut").textContent = bytesToHex(privateKeyBytes);
+
+    const num = bytesToBigInt(privateKeyBytes.slice(0, 6));
+    $("publicKeyOut").textContent = String((num * 7n) % 1000007n);
+
+    $("keysStatus").innerHTML = "<span class='text-success'>Ключі згенеровано</span>";
+  };
+
+  $("signBtn").onclick = async () => {
+    if (!privateKeyBytes) return show("signStatus", "danger", "Згенеруйте ключі");
+
+    const file = $("fileToSign").files[0];
+    if (!file) return show("signStatus", "danger", "Оберіть файл");
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const hash = await sha256Bytes(bytes);
+
+    $("signedHashOut").textContent = bytesToHex(hash);
+
+    const sig = xorBytes(hash, privateKeyBytes);
+    lastSignatureHex = bytesToHex(sig);
+    signedFileName = file.name + ".sig";
+
+    $("signatureOut").textContent = lastSignatureHex;
+    $("downloadSigBtn").classList.remove("d-none");
+
+    show("signStatus", "success", "Підпис створено");
+  };
+
+  $("downloadSigBtn").onclick = () => {
+    const blob = new Blob([lastSignatureHex], { type: "text/plain" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = signedFileName;
+    link.click();
+  };
+
+  $("verifyBtn").onclick = async () => {
+    if (!privateKeyBytes) return show("verifyResult", "danger", "Згенеруйте ключі");
+
+    const file = $("fileToVerify").files[0];
+    const sigFile = $("sigFileInput").files[0];
+
+    if (!file || !sigFile)
+      return show("verifyResult", "danger", "Оберіть документ і файл підпису");
+
+    const sigHex = await sigFile.text();
+    const sigBytes = hexToBytes(sigHex.trim());
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const hash = await sha256Bytes(bytes);
+    $("verifyHashOut").textContent = bytesToHex(hash);
+
+    const recovered = xorBytes(sigBytes, privateKeyBytes);
+
+    if (bytesToHex(recovered) === bytesToHex(hash)) {
+      show("verifyResult", "success", "Підпис ДІЙСНИЙ");
+    } else {
+      show("verifyResult", "danger", "Підпис ПІДРОБЛЕНИЙ");
+    }
+  };
+
+  function show(id, type, text) {
+    const el = $(id);
+    el.className = `alert alert-${type} mt-3`;
+    el.textContent = text;
+    el.classList.remove("d-none");
+  }
+
+  async function sha256Bytes(data) {
+    return new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+  }
+
+  const xorBytes = (a, b) => a.map((v, i) => v ^ b[i]);
+
+  const bytesToHex = b => Array.from(b).map(x => x.toString(16).padStart(2, "0")).join("");
+
+  const hexToBytes = h =>
+    new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+
+  function bytesToBigInt(bytes) {
+    let n = 0n;
+    for (const b of bytes) n = (n << 8n) + BigInt(b);
+    return n;
+  }
+</script>
+
+</body>
+</html>
