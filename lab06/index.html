@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Демо SQL-інʼєкцій</title>
+
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <script src="https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js"></script>
+
+    <style>
+      body {
+        background: #f8f9fa;
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Courier New", monospace;
+      }
+      .box {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      table {
+        font-size: 0.95rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container py-4">
+      <h1 class="text-center mb-4">Демонстрація SQL-інʼєкцій та захисту</h1>
+
+      <div class="card mb-4">
+        <div class="card-body">
+          <h5 class="mb-3">Пошук студентів за прізвищем</h5>
+
+          <div class="row g-3 align-items-end">
+            <div class="col-md-8">
+              <label class="form-label">Введіть прізвище</label>
+              <input
+                id="searchInput"
+                class="form-control"
+                placeholder="Наприклад: Kozhan"
+              />
+            </div>
+            <div class="col-md-4 d-grid">
+              <button class="btn btn-primary" id="runBtn">
+                Виконати пошук
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-lg-6">
+          <div class="card shadow-sm h-100 border-danger">
+            <div class="card-body">
+              <h5 class="text-danger">Вразлива версія</h5>
+              <p class="mb-2">Пряме підставлення вводу в SQL.</p>
+
+              <div class="mb-2">
+                <div class="small text-muted">SQL запит:</div>
+                <div class="mono border rounded p-2 bg-white box" id="vulnSql">
+                  —
+                </div>
+              </div>
+
+              <div id="vulnAlert" class="alert d-none"></div>
+
+              <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>ID</th>
+                      <th>Імʼя</th>
+                      <th>Прізвище</th>
+                      <th>Email</th>
+                    </tr>
+                  </thead>
+                  <tbody id="vulnTbody">
+                    <tr>
+                      <td colspan="5" class="text-muted">—</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-6">
+          <div class="card shadow-sm h-100 border-success">
+            <div class="card-body">
+              <h5 class="text-success">Захищена версія</h5>
+              <p class="mb-2">Prepared statement (параметризований запит).</p>
+
+              <div class="mb-2">
+                <div class="small text-muted">SQL запит:</div>
+                <div class="mono border rounded p-2 bg-white box" id="safeSql">
+                  —
+                </div>
+              </div>
+
+              <div id="safeAlert" class="alert d-none"></div>
+
+              <div class="table-responsive">
+                <table class="table table-sm table-bordered align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>ID</th>
+                      <th>Імʼя</th>
+                      <th>Прізвище</th>
+                      <th>Email</th>
+                    </tr>
+                  </thead>
+                  <tbody id="safeTbody">
+                    <tr>
+                      <td colspan="5" class="text-muted">—</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let SQL = null;
+      let db = null;
+
+      const $ = (id) => document.getElementById(id);
+
+      (async function init() {
+        SQL = await initSqlJs({
+          locateFile: (file) =>
+            `https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/${file}`,
+        });
+        resetDb();
+        wireUI();
+      })();
+
+      function wireUI() {
+        $("runBtn").addEventListener("click", runSearch);
+      }
+
+      function resetDb() {
+        if (db) db.close();
+        db = new SQL.Database();
+
+        db.run(`
+      CREATE TABLE students (
+        id INTEGER PRIMARY KEY,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        email TEXT NOT NULL
+      );
+
+      INSERT INTO students (first_name, last_name, email) VALUES
+      ('Maksym', 'Bilchenko', 'maksym.bilchenko@hneu.net'),
+      ('Andrii', 'Dashkov', 'andrii.dashkov@hneu.net'),
+      ('Viktoriia', 'Dolha', 'viktoriia.dolha@hneu.net'),
+      ('Vladyslav', 'Yevtushenko', 'vladyslav.yevtushenko@hneu.net'),
+      ('Serhii', 'Kozhan', 'serhii.kozhan@hneu.net'),
+      ('Anastasiia', 'Konoshkova', 'anastasiia.konoshkova@hneu.net'),
+      ('Mykyta', 'Lykhoman', 'mykyta.lykhoman@hneu.net'),
+      ('Yana', 'Makhynia', 'yana.makhynia@hneu.net'),
+      ('David', 'Pakhomov', 'david.pakhomov@hneu.net'),
+      ('Vladyslava', 'Petrikina', 'vladyslava.petrikina@hneu.net'),
+      ('Mykyta', 'Pryz', 'mykyta.pryz@hneu.net'),
+      ('Yelyzaveta', 'Rozsohach', 'yelyzaveta.rozsohach@hneu.net'),
+      ('Yaroslava', 'Saltevska', 'yaroslava.saltevska@hneu.net'),
+      ('Kyrylo', 'Skrynnyk', 'kyrylo.skrynnyk@hneu.net'),
+      ('Maksym', 'Storozhun', 'maksym.storozhun@hneu.net'),
+      ('Mykyta', 'Khusainov', 'mykyta.khusainov@hneu.net'),
+      ('Ruslan', 'Chystoborodov', 'ruslan.chystoborodov@hneu.net'),
+      ('Valerii', 'Shvydkoi', 'valerii.shvydkoi@hneu.net'),
+      ('Vitalii', 'Shybaiev', 'vitalii.shybaiev@hneu.net'),
+      ('Vitalii', 'Shchur', 'vitalii.shchur@hneu.net'),
+      ('Kostiantyn', 'Yurchuk', 'kostiantyn.yurchuk@hneu.net');`);
+
+        clearTables();
+        hideAlert("vulnAlert");
+        hideAlert("safeAlert");
+        $("vulnSql").textContent = "—";
+        $("safeSql").textContent = "—";
+      }
+
+      function runSearch() {
+        const input = $("searchInput").value;
+
+        const vulnQuery = `SELECT id, first_name, last_name, email FROM students WHERE last_name = '${input}';`;
+
+        $("vulnSql").textContent = vulnQuery;
+
+        try {
+          const res = db.exec(vulnQuery);
+          renderResult(res, "vulnTbody");
+        } catch (e) {
+          renderEmpty("vulnTbody");
+          showAlert("vulnAlert", "danger", "Помилка SQL: " + (e?.message || e));
+        }
+
+        const safeQuery =
+          "SELECT id, first_name, last_name, email FROM students WHERE last_name = ?;";
+
+        $("safeSql").textContent =
+          safeQuery + "\nПараметр: " + JSON.stringify(input);
+
+        try {
+          const stmt = db.prepare(safeQuery);
+          stmt.bind([input]); // параметр, не код
+          const rows = [];
+          while (stmt.step()) rows.push(stmt.getAsObject());
+          stmt.free();
+          renderRows(rows, "safeTbody");
+        } catch (e) {
+          renderEmpty("safeTbody");
+          showAlert("safeAlert", "danger", "Помилка SQL: " + (e?.message || e));
+        }
+      }
+
+      function renderResult(execResult, tbodyId) {
+        if (!execResult || execResult.length === 0) {
+          renderEmpty(tbodyId);
+          return;
+        }
+        const cols = execResult[0].columns;
+        const values = execResult[0].values;
+
+        const rows = values.map((v) => ({
+          id: v[cols.indexOf("id")],
+          first_name: v[cols.indexOf("first_name")],
+          last_name: v[cols.indexOf("last_name")],
+          email: v[cols.indexOf("email")],
+        }));
+        renderRows(rows, tbodyId);
+      }
+
+      function renderRows(rows, tbodyId) {
+        const tbody = $(tbodyId);
+        tbody.innerHTML = "";
+
+        if (!rows || rows.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="text-muted">Нічого не знайдено</td></tr>`;
+          return;
+        }
+
+        for (const r of rows) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+        <td>${escapeHtml(r.id)}</td>
+        <td>${escapeHtml(r.first_name)}</td>
+        <td>${escapeHtml(r.last_name)}</td>
+        <td>${escapeHtml(r.email)}</td>
+      `;
+          tbody.appendChild(tr);
+        }
+      }
+
+      function renderEmpty(tbodyId) {
+        $(
+          tbodyId
+        ).innerHTML = `<tr><td colspan="5" class="text-muted">—</td></tr>`;
+      }
+
+      function clearTables() {
+        renderEmpty("vulnTbody");
+        renderEmpty("safeTbody");
+      }
+
+      function showAlert(id, type, text) {
+        const el = $(id);
+        el.className = "alert alert-" + type + " mt-2";
+        el.textContent = text;
+        el.classList.remove("d-none");
+      }
+      function hideAlert(id) {
+        const el = $(id);
+        el.classList.add("d-none");
+        el.textContent = "";
+      }
+
+      function escapeHtml(x) {
+        return String(x)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+    </script>
+  </body>
+</html>
