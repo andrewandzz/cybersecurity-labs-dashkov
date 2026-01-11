@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Двоетапний захист</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+
+  <style>
+    body { background:#f8f9fa; }
+    canvas { max-width:100%; border:1px solid #d0d0d0; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace; }
+    .box { white-space: pre-wrap; word-break: break-word; }
+    .smallhint { font-size: .9rem; color:#6c757d; }
+  </style>
+</head>
+<body>
+
+<div class="container py-4">
+  <h1 class="text-center mb-4">Двоетапний захист</h1>
+
+  <div class="card mb-5 border-primary">
+    <div class="card-body">
+      <h4 class="text-primary mb-2">Флоу 1: Захист файлу (AES → LSB)</h4>
+      <div class="smallhint mb-3">
+        Кроки: вибрати файл → вибрати зображення → ввести дані для ключа → отримати stego.png
+      </div>
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Файл для захисту</label>
+          <input type="file" id="encFile" class="form-control">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Зображення-контейнер</label>
+          <input type="file" id="encImage" class="form-control" accept="image/*">
+        </div>
+      </div>
+
+      <div class="row g-3 mt-2">
+        <div class="col-md-6">
+          <label class="form-label">Персональні дані (для ключа)</label>
+          <input id="encKey" class="form-control" placeholder="Наприклад: AndriiDashkov2003">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Додаткове слово (опціонально)</label>
+          <input id="encSecret" class="form-control" placeholder="Наприклад: secret_word">
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 flex-wrap mt-3">
+        <button class="btn btn-primary" id="encryptBtn">Захистити файл</button>
+        <button class="btn btn-outline-danger" id="resetBtn">Скинути все</button>
+      </div>
+
+      <div id="encStatus" class="alert d-none mt-3 mb-0"></div>
+
+      <hr class="my-3"/>
+
+      <div class="row g-3">
+        <div class="col-lg-7">
+          <h6 class="mb-2">Модифіковане зображення</h6>
+          <canvas id="encCanvas"></canvas>
+
+          <button id="downloadStego" class="btn btn-success mt-3 d-none">
+            Завантажити stego.png
+          </button>
+        </div>
+
+        <div class="col-lg-5">
+          <h6 class="mb-2">Коротка довідка по місткості</h6>
+          <div class="border rounded p-2 bg-white">
+            <div><strong>Місткість LSB:</strong> ~ <span id="encCapacity">—</span></div>
+            <div><strong>Потрібно сховати:</strong> <span id="encNeeded">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-4 border-success">
+    <div class="card-body">
+      <h4 class="text-success mb-2">Флоу 2: Відновлення файлу (LSB → AES)</h4>
+      <div class="smallhint mb-3">
+        Кроки: вибрати stego.png → ввести ті самі дані для ключа → отримати оригінальний файл
+      </div>
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Зображення stego.png</label>
+          <input type="file" id="decImage" class="form-control" accept="image/*">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Імʼя відновленого файлу</label>
+          <input id="decName" class="form-control" placeholder="restored.bin">
+        </div>
+      </div>
+
+      <div class="row g-3 mt-2">
+        <div class="col-md-6">
+          <label class="form-label">Персональні дані (ключ)</label>
+          <input id="decKey" class="form-control" placeholder="Наприклад: AndriiDashkov2003">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Додаткове слово</label>
+          <input id="decSecret" class="form-control" placeholder="Наприклад: secret_word">
+        </div>
+      </div>
+
+      <button class="btn btn-success mt-3" id="decryptBtn">Відновити файл</button>
+
+      <div id="decStatus" class="alert d-none mt-3 mb-0"></div>
+
+      <hr class="my-3"/>
+
+      <h6 class="mb-2">Модифіковане зображення</h6>
+      <canvas id="decCanvas"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <h4 class="mb-3">Аналітика</h4>
+
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Метрика</th>
+              <th>Значення</th>
+            </tr>
+          </thead>
+          <tbody id="metricsTbody">
+            <tr><td class="text-muted" colspan="2">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="row g-3 mt-3">
+        <div class="col-lg-6">
+          <h6 class="mb-2">Журнал операцій</h6>
+          <div class="mono border rounded p-2 bg-white box" id="opsLog">—</div>
+        </div>
+        <div class="col-lg-6">
+          <h6 class="mb-2">Підсумок / Висновок</h6>
+          <div class="mono border rounded p-2 bg-white box" id="finalSummary">—</div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 flex-wrap mt-3">
+        <button class="btn btn-outline-primary d-none" id="downloadReportBtn">Завантажити звіт (TXT)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  const encCanvas = $("encCanvas");
+  const decCanvas = $("decCanvas");
+  const encCtx = encCanvas.getContext("2d", { willReadFrequently: true });
+  const decCtx = decCanvas.getContext("2d", { willReadFrequently: true });
+
+  let originalBytes = null;
+  let originalName = null;
+  let originalHashHex = null;
+
+  let stegoBlob = null;
+
+  const Analytics = {
+    metrics: {},
+    ops: [],
+    reset() {
+      this.metrics = {};
+      this.ops = [];
+      renderMetrics();
+      renderOps();
+      $("finalSummary").textContent = "—";
+      $("downloadReportBtn").classList.add("d-none");
+    },
+    set(k, v) {
+      this.metrics[k] = v;
+      renderMetrics();
+    },
+    log(line) {
+      this.ops.push(line);
+      renderOps();
+    },
+    buildReportText() {
+      const lines = [];
+      lines.push("ЗВІТ: Двоетапний захист (AES-GCM + LSB-стеганографія)");
+      lines.push("==================================================");
+      lines.push("");
+      lines.push("Метрики:");
+      for (const [k, v] of Object.entries(this.metrics)) lines.push(`- ${k}: ${v}`);
+      lines.push("");
+      lines.push("Журнал операцій:");
+      lines.push(this.ops.length ? this.ops.join("\n") : "—");
+      lines.push("");
+      lines.push("Автоматичний висновок:");
+      lines.push(
+        "Система застосовує два послідовні методи: AES-шифрування (конфіденційність/цілісність) " +
+        "та LSB-стеганографію (прихованість факту передачі). Для доступу до даних необхідні обидва етапи: " +
+        "без витягування payload з контейнера AES-дані недоступні, а без правильного ключа витягнуті байти " +
+        "залишаються шифртекстом."
+      );
+      return lines.join("\n");
+    }
+  };
+
+  function renderMetrics() {
+    const tbody = $("metricsTbody");
+    tbody.innerHTML = "";
+    const entries = Object.entries(Analytics.metrics);
+    if (!entries.length) {
+      tbody.innerHTML = `<tr><td class="text-muted" colspan="2">—</td></tr>`;
+      return;
+    }
+    for (const [k, v] of entries) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  function renderOps() {
+    $("opsLog").textContent = Analytics.ops.length ? Analytics.ops.join("\n") : "—";
+  }
+
+  function setEncCapacityInfo() {
+    if (!encCanvas.width || !encCanvas.height) {
+      $("encCapacity").textContent = "—";
+      return;
+    }
+    const cap = calcCapacityBytes(encCanvas.width, encCanvas.height);
+    $("encCapacity").textContent = `${formatBytes(cap)} (≈ ${cap} байт)`;
+  }
+
+  function show(elId, type, text) {
+    const el = $(elId);
+    el.className = `alert alert-${type} mt-3 mb-0`;
+    el.textContent = text;
+    el.classList.remove("d-none");
+  }
+  function hide(elId) {
+    const el = $(elId);
+    el.classList.add("d-none");
+    el.textContent = "";
+  }
+
+  $("resetBtn").addEventListener("click", () => {
+    // clear state
+    originalBytes = null; originalName = null; originalHashHex = null;
+    stegoBlob = null;
+
+    // clear inputs
+    $("encFile").value = "";
+    $("encImage").value = "";
+    $("encKey").value = "";
+    $("encSecret").value = "";
+    $("decImage").value = "";
+    $("decKey").value = "";
+    $("decSecret").value = "";
+    $("decName").value = "";
+
+    // clear canvases
+    encCtx.clearRect(0, 0, encCanvas.width, encCanvas.height);
+    decCtx.clearRect(0, 0, decCanvas.width, decCanvas.height);
+    encCanvas.width = 0; encCanvas.height = 0;
+    decCanvas.width = 0; decCanvas.height = 0;
+
+    // hide buttons/messages
+    $("downloadStego").classList.add("d-none");
+    hide("encStatus");
+    hide("decStatus");
+
+    // analytics
+    Analytics.reset();
+
+    // capacity info
+    $("encCapacity").textContent = "—";
+    $("encNeeded").textContent = "—";
+  });
+
+  $("encFile").addEventListener("change", async (e) => {
+    hide("encStatus");
+    const f = e.target.files[0];
+    if (!f) return;
+    originalName = f.name;
+    originalBytes = new Uint8Array(await f.arrayBuffer());
+    originalHashHex = await sha256Hex(originalBytes);
+
+    Analytics.set("Оригінальний файл", originalName);
+    Analytics.set("Розмір оригіналу", formatBytes(originalBytes.length));
+    Analytics.set("SHA-256 оригіналу", originalHashHex);
+    Analytics.log(`Файл завантажено: ${originalName} (${formatBytes(originalBytes.length)})`);
+  });
+
+  $("encImage").addEventListener("change", async (e) => {
+    hide("encStatus");
+    const f = e.target.files[0];
+    if (!f) return;
+
+    const img = new Image();
+    img.onload = () => {
+      encCanvas.width = img.width;
+      encCanvas.height = img.height;
+      encCtx.drawImage(img, 0, 0);
+      setEncCapacityInfo();
+
+      const cap = calcCapacityBytes(img.width, img.height);
+      Analytics.set("Контейнер (px)", `${img.width}×${img.height}`);
+      Analytics.set("Місткість LSB (байт)", `${cap} байт`);
+      Analytics.log(`Контейнер завантажено: ${img.width}×${img.height}, місткість ~${formatBytes(cap)}`);
+    };
+    img.src = URL.createObjectURL(f);
+  });
+
+  $("decImage").addEventListener("change", async (e) => {
+    hide("decStatus");
+    const f = e.target.files[0];
+    if (!f) return;
+
+    const img = new Image();
+    img.onload = () => {
+      decCanvas.width = img.width;
+      decCanvas.height = img.height;
+      decCtx.drawImage(img, 0, 0);
+      Analytics.log(`Stego-контейнер завантажено у Flow 2: ${img.width}×${img.height}`);
+    };
+    img.src = URL.createObjectURL(f);
+  });
+
+  $("encryptBtn").addEventListener("click", async () => {
+    hide("encStatus");
+    $("downloadStego").classList.add("d-none");
+    stegoBlob = null;
+
+    if (!originalBytes) {
+      show("encStatus", "danger", "Оберіть файл для захисту.");
+      return;
+    }
+    if (!encCanvas.width || !encCanvas.height) {
+      show("encStatus", "danger", "Оберіть зображення-контейнер.");
+      return;
+    }
+    const person = $("encKey").value.trim();
+    const secret = $("encSecret").value.trim();
+    if (!person) {
+      show("encStatus", "danger", "Введіть персональні дані для ключа.");
+      return;
+    }
+
+    try {
+      Analytics.log("FLOW 1: Захист (AES → LSB)");
+
+      const key = await deriveAesKey(person, secret);
+
+      const tA0 = performance.now();
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const cipherBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, originalBytes);
+      const tA1 = performance.now();
+
+      const cipherBytes = new Uint8Array(cipherBuf);
+      Analytics.set("Час AES encrypt (мс)", (tA1 - tA0).toFixed(2));
+      Analytics.set("Розмір шифртексту", formatBytes(cipherBytes.length));
+      Analytics.log(`AES: iv=12 байт, cipher=${formatBytes(cipherBytes.length)}`);
+
+      // inner = [ivLen(1)][iv][cipher]
+      const inner = concatBytes(new Uint8Array([iv.length]), iv, cipherBytes);
+
+      // payload = [len32BE][inner]
+      const payloadLen = inner.length;
+      const len32 = u32ToBytesBE(payloadLen);
+      const payload = concatBytes(len32, inner);
+
+      $("encNeeded").textContent = `${formatBytes(payload.length)} (header+data)`;
+
+      // capacity check
+      const cap = calcCapacityBytes(encCanvas.width, encCanvas.height);
+      if (payload.length > cap) {
+        show("encStatus", "danger",
+          `Недостатня місткість контейнера. Потрібно ${formatBytes(payload.length)}, доступно ${formatBytes(cap)}. Візьміть більше зображення.`
+        );
+        Analytics.log("LSB: недостатня місткість контейнера.");
+        return;
+      }
+
+      const tL0 = performance.now();
+      const imgData = encCtx.getImageData(0, 0, encCanvas.width, encCanvas.height);
+      lsbEmbed(imgData.data, payload);
+      encCtx.putImageData(imgData, 0, 0);
+      const tL1 = performance.now();
+
+      Analytics.set("Час LSB embed (мс)", (tL1 - tL0).toFixed(2));
+      Analytics.log("LSB: payload вбудовано у пікселі (RGB LSB).");
+
+      encCanvas.toBlob((blob) => {
+        stegoBlob = blob;
+
+        Analytics.set("Розмір stego.png", formatBytes(blob.size));
+        Analytics.log(`PNG: сформовано stego.png (${formatBytes(blob.size)})`);
+
+        const btn = $("downloadStego");
+        btn.classList.remove("d-none");
+        btn.onclick = () => {
+          downloadBlob(stegoBlob, "stego.png");
+        };
+
+        $("downloadReportBtn").classList.remove("d-none");
+        show("encStatus", "success", "Готово. Файл зашифровано та приховано. Завантаж stego.png.");
+        updateFinalSummary();
+      }, "image/png");
+    } catch (e) {
+      show("encStatus", "danger", "Помилка: " + (e?.message || e));
+      Analytics.log("Помилка FLOW 1: " + (e?.message || e));
+      updateFinalSummary();
+    }
+  });
+
+  $("decryptBtn").addEventListener("click", async () => {
+    hide("decStatus");
+
+    if (!decCanvas.width || !decCanvas.height) {
+      show("decStatus", "danger", "Оберіть stego.png у Flow 2.");
+      return;
+    }
+    const person = $("decKey").value.trim();
+    const secret = $("decSecret").value.trim();
+    if (!person) {
+      show("decStatus", "danger", "Введіть персональні дані (ключ) у Flow 2.");
+      return;
+    }
+
+    const outName = ($("decName").value.trim() || "restored.bin");
+
+    try {
+      Analytics.log("FLOW 2: Відновлення (LSB → AES)");
+
+      const tE0 = performance.now();
+      const imgData = decCtx.getImageData(0, 0, decCanvas.width, decCanvas.height);
+      const extracted = lsbExtractWithLength(imgData.data);
+      const tE1 = performance.now();
+
+      if (!extracted) {
+        show("decStatus", "danger", "Не вдалося витягнути payload (контейнер не містить коректних даних).");
+        Analytics.log("LSB extract: payload не знайдено/некоректний.");
+        updateFinalSummary();
+        return;
+      }
+
+      Analytics.set("Час LSB extract (мс)", (tE1 - tE0).toFixed(2));
+      Analytics.set("Розмір витягнутого payload", formatBytes(extracted.length));
+      Analytics.log(`LSB: витягнуто payload=${formatBytes(extracted.length)}`);
+
+      // extracted = inner = [ivLen][iv][cipher]
+      const ivLen = extracted[0];
+      const iv = extracted.slice(1, 1 + ivLen);
+      const cipher = extracted.slice(1 + ivLen);
+
+      if (ivLen !== 12 || cipher.length === 0) {
+        show("decStatus", "danger", "Пошкоджені дані: неправильний IV або порожній ciphertext.");
+        Analytics.log("Parse payload: ivLen!=12 або cipher пустий.");
+        updateFinalSummary();
+        return;
+      }
+
+      const key = await deriveAesKey(person, secret);
+
+      const tD0 = performance.now();
+      const plainBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipher);
+      const tD1 = performance.now();
+
+      const plainBytes = new Uint8Array(plainBuf);
+      Analytics.set("Час AES decrypt (мс)", (tD1 - tD0).toFixed(2));
+      Analytics.set("Розмір відновленого файлу", formatBytes(plainBytes.length));
+      Analytics.log(`AES decrypt: успішно (${formatBytes(plainBytes.length)})`);
+
+      // integrity check (if original loaded in this session)
+      const restoredHash = await sha256Hex(plainBytes);
+      Analytics.set("SHA-256 відновленого", restoredHash);
+
+      if (originalHashHex) {
+        const ok = restoredHash === originalHashHex;
+        Analytics.set("Цілісність (SHA-256)", ok ? "OK" : "FAIL");
+        Analytics.log(ok ? "Цілісність: SHA-256 збігається" : "Цілісність: SHA-256 НЕ збігається");
+      } else {
+        Analytics.set("Цілісність (SHA-256)", "Оригінал не завантажений у цій сесії");
+        Analytics.log("Цілісність: оригінал не завантажений — порівняння недоступне.");
+      }
+
+      // download restored file
+      downloadBlob(new Blob([plainBytes]), outName);
+
+      $("downloadReportBtn").classList.remove("d-none");
+      show("decStatus", "success", `Відновлено. Файл завантажується як: ${outName}`);
+      updateFinalSummary();
+    } catch (e) {
+      // wrong key / tampered data => AES-GCM throws
+      show("decStatus", "danger", "Не вдалося розшифрувати (неправильний ключ або пошкоджений контейнер).");
+      Analytics.log("AES decrypt: " + (e?.message || e));
+      Analytics.set("AES decrypt", "FAIL");
+      updateFinalSummary();
+    }
+  });
+
+  $("downloadReportBtn").addEventListener("click", () => {
+    const text = Analytics.buildReportText();
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    downloadBlob(blob, "report.txt");
+  });
+
+  function updateFinalSummary() {
+    const m = Analytics.metrics;
+
+    const lines = [];
+    lines.push("Підсумок:");
+    if (m["Час AES encrypt (мс)"]) lines.push(`- AES encrypt: ${m["Час AES encrypt (мс)"]} мс`);
+    if (m["Час LSB embed (мс)"]) lines.push(`- LSB embed: ${m["Час LSB embed (мс)"]} мс`);
+    if (m["Час LSB extract (мс)"]) lines.push(`- LSB extract: ${m["Час LSB extract (мс)"]} мс`);
+    if (m["Час AES decrypt (мс)"]) lines.push(`- AES decrypt: ${m["Час AES decrypt (мс)"]} мс`);
+
+    lines.push("");
+    lines.push("Висновок:");
+    lines.push(
+      "Для доступу до даних потрібні обидва етапи: " +
+      "LSB забезпечує прихованість (без нього немає payload), " +
+      "AES забезпечує конфіденційність/цілісність (без правильного ключа розшифрування неможливе)."
+    );
+
+    $("finalSummary").textContent = lines.join("\n");
+  }
+
+  async function deriveAesKey(person, secret) {
+    const seed = new TextEncoder().encode(person.trim() + "|" + (secret || "").trim());
+    const hash = await sha256Bytes(seed);
+    return crypto.subtle.importKey("raw", hash, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+  }
+
+  async function sha256Bytes(data) {
+    const digest = await crypto.subtle.digest("SHA-256", data);
+    return new Uint8Array(digest);
+  }
+
+  async function sha256Hex(bytes) {
+    const h = await sha256Bytes(bytes);
+    return bytesToHex(h);
+  }
+
+  // Embed payload bytes into RGB LSB. Payload already contains 4-byte length header + data.
+  function lsbEmbed(rgbaBytes, payloadBytes) {
+    let bitIndex = 0;
+    const totalBits = payloadBytes.length * 8;
+
+    for (let i = 0; i < rgbaBytes.length && bitIndex < totalBits; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        if (bitIndex >= totalBits) break;
+
+        const byteIndex = (bitIndex / 8) | 0;
+        const bitInByte = 7 - (bitIndex % 8);
+        const bit = (payloadBytes[byteIndex] >> bitInByte) & 1;
+
+        rgbaBytes[i + c] = (rgbaBytes[i + c] & 254) | bit;
+        bitIndex++;
+      }
+    }
+  }
+
+  // Extract: read first 4 bytes length, then read exactly that many bytes (inner payload).
+  // Returns Uint8Array(innerPayload) or null.
+  function lsbExtractWithLength(rgbaBytes) {
+    // Read bits stream from RGB channels
+    let pos = 0;      // rgba index
+    let chan = 0;     // 0..2
+
+    function nextBit() {
+      while (pos < rgbaBytes.length) {
+        const bit = rgbaBytes[pos + chan] & 1;
+        chan++;
+        if (chan === 3) { chan = 0; pos += 4; }
+        return bit;
+      }
+      return null;
+    }
+
+    // Read 4 bytes length header (32 bits) big-endian
+    const header = new Uint8Array(4);
+    for (let i = 0; i < 32; i++) {
+      const b = nextBit();
+      if (b === null) return null;
+      const bi = (i / 8) | 0;
+      header[bi] = (header[bi] << 1) | b;
+    }
+
+    const len = bytesToU32BE(header);
+
+    // sanity checks
+    const capacity = calcCapacityBytesFromRgbaLen(rgbaBytes.length);
+    if (len <= 0 || len > capacity) return null;
+
+    const out = new Uint8Array(len);
+    let cur = 0;
+    let bits = 0;
+    let outIdx = 0;
+
+    for (let i = 0; i < len * 8; i++) {
+      const b = nextBit();
+      if (b === null) return null;
+      cur = (cur << 1) | b;
+      bits++;
+      if (bits === 8) {
+        out[outIdx++] = cur;
+        cur = 0;
+        bits = 0;
+      }
+    }
+
+    return out;
+  }
+
+  function calcCapacityBytes(w, h) {
+    // 3 bits per pixel => bytes
+    return Math.floor((w * h * 3) / 8);
+  }
+  function calcCapacityBytesFromRgbaLen(rgbaLen) {
+    const pixels = Math.floor(rgbaLen / 4);
+    return Math.floor((pixels * 3) / 8);
+  }
+
+  function concatBytes(...parts) {
+    const total = parts.reduce((s, p) => s + p.length, 0);
+    const out = new Uint8Array(total);
+    let off = 0;
+    for (const p of parts) { out.set(p, off); off += p.length; }
+    return out;
+  }
+
+  function u32ToBytesBE(n) {
+    return new Uint8Array([
+      (n >>> 24) & 255,
+      (n >>> 16) & 255,
+      (n >>> 8) & 255,
+      n & 255
+    ]);
+  }
+
+  function bytesToU32BE(b) {
+    return ((b[0] << 24) >>> 0) + (b[1] << 16) + (b[2] << 8) + b[3];
+  }
+
+  function bytesToHex(bytes) {
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  function downloadBlob(blob, filename) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+  }
+
+  function formatBytes(n) {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(2)} KB`;
+    return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  function escapeHtml(x) {
+    return String(x)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+</script>
+</body>
+</html>
